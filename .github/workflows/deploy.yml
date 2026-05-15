@@ -125,8 +125,16 @@ jobs:
 
       - name: Apply workload secret
         run: |
+          DATABASE_URL="$(
+            doctl databases get "$DATABASE_ID" --output json | python3 -c "import json, sys; payload=json.load(sys.stdin); cluster=payload[0] if isinstance(payload, list) else payload; connection=cluster.get('private_connection') or cluster.get('connection') or {}; print(connection.get('uri', ''))"
+          )"
+          if [ -z "$DATABASE_URL" ]; then
+            echo "Could not resolve the managed PostgreSQL connection URI."
+            exit 1
+          fi
+          echo "::add-mask::$DATABASE_URL"
           kubectl -n "$DO_NAMESPACE" create secret generic workload-env \
-            --from-literal=DATABASE_URL='${{ secrets.WORKLOAD_DATABASE_URL }}' \
+            --from-literal=DATABASE_URL="$DATABASE_URL" \
             --dry-run=client \
             -o yaml | kubectl apply -f -
 
